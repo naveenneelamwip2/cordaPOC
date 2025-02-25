@@ -1,0 +1,55 @@
+module Bond where
+
+import Daml.Script
+
+type BondId = ContractId Bond
+
+template Bond
+  with
+    issuer      : Party
+    owner       : Party
+    amount      : Decimal
+    participants: [Party]
+    couponRate : Int
+    maturityDate : Text
+  where
+    ensure amount > 0.0
+    signatory issuer
+    observer owner, participants
+    choice Transfer : BondId
+      with
+        newOwner : Party
+        newParticipants: [Party]
+      controller owner
+      do create this with
+           owner = newOwner
+           participants = newParticipants
+
+setup : Script BondId
+setup = script do
+  -- user_setup_begin
+  lloydsBank <- allocatePartyWithHint "LloydsBank" (PartyIdHint "LloydsBank")
+  mahesh <- allocatePartyWithHint "Mahesh" (PartyIdHint "Mahesh")
+  naveen <- allocatePartyWithHint "Naveen" (PartyIdHint "Naveen")
+  lloydsBankId <- validateUserId "lloydsBank"
+  maheshId <- validateUserId "mahesh"
+  naveenId <- validateUserId "naveen"
+  createUser (User lloydsBankId (Some lloydsBank)) [CanActAs lloydsBank]
+  createUser (User maheshId (Some mahesh)) [CanActAs mahesh]
+  createUser (User naveenId (Some naveen)) [CanActAs naveen]
+  -- user_setup_end
+
+  lloydsBankBond <- submit lloydsBank do
+    createCmd Bond with
+      issuer = lloydsBank
+      owner = lloydsBank
+      amount = 1000.0
+      participants = [lloydsBank]
+      couponRate = 34
+      maturityDate = "2026-01-26T17:16:18.471Z"
+
+  maheshBond <- submit lloydsBank do
+    exerciseCmd lloydsBankBond Transfer with newOwner = mahesh, newParticipants=[lloydsBank, mahesh]
+
+  submit mahesh do
+    exerciseCmd maheshBond Transfer with newOwner = naveen, newParticipants=[mahesh, naveen]
